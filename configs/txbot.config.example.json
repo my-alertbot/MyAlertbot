@@ -1,0 +1,16 @@
+{
+  "poll_window_blocks": 600,
+  "min_native_value": 5,
+  "ignore_zero_value_contract_calls": true,
+  "max_tx_age_minutes": 60,
+  "chains": [
+    {"name": "Ethereum", "chain_id": 1},
+    {"name": "Arbitrum", "chain_id": 42161},
+    {"name": "Base", "chain_id": 8453},
+    {"name": "Polygon", "chain_id": 137}
+  ],
+  "watch_addresses": [
+    "0xd8dA6BF26964aF9D7eEd9e03E53415D37aA96045",
+    "0x57757E3D981446D585Af0D9Ae4d7DF6D64647806"
+  ]
+}

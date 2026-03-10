@@ -1,0 +1,47 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+
+# Virtual environments
+.venv/
+venv/
+env/
+ENV/
+
+# Environment variables
+.env
+.env.private
+
+# State files (runtime data)
+state/*
+!state/.gitkeep
+state.json
+*_state.json
+*.state.json
+rssstate.json
+*.rssstate.json
+
+# Log files
+*.log
+
+# Config files (may contain secrets)
+configs/schedule.yaml
+configs/*.config
+configs/*.config.json
+configs/privateschedule.yaml
+configs/calendarbot.ics
+configs/private/*
+!configs/private/.gitkeep
+
+# Private/local-only bots (keep package scaffold files)
+src/alertbot/bots/private/*
+!src/alertbot/bots/private/.gitignore
+!src/alertbot/bots/private/__init__.py
+!src/alertbot/bots/private/README.md
+
+# Build / packaging artifacts
+build/
+src/alertbot.egg-info/

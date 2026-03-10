@@ -1,0 +1,4 @@
+# Keep this directory/package in git, but ignore local private bot files by default.
+*
+!.gitignore
+!__init__.py

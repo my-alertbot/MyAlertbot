@@ -1,0 +1,107 @@
+# AlertBot Schedule Configuration
+# This is the single source of truth for all bot scheduling.
+# Bots not listed here are DISABLED by default.
+#
+# interval_minutes: How often the bot runs automatically
+#                   The bot derives its lookback window from this value.
+# enabled: Set to false to disable a bot without removing it
+# manual_only: Set true to allow Telegram/manual runs without a scheduler job
+
+bots:
+  # Stock price checker
+  stock:
+    enabled: true
+    interval_minutes: 360
+
+  # Stock threshold alerts (watch/action)
+  stockalert:
+    enabled: false
+    interval_minutes: 180
+    config_file: configs/stockalert.config
+
+  # Crypto price alerts
+  crypto:
+    enabled: false
+    interval_minutes: 120
+    config_file: configs/cryptobot.config
+
+  # Air Quality Index monitor
+  airquality:
+    enabled: true
+    interval_minutes: 120
+
+  # GitHub notifications
+  gh:
+    enabled: true
+    interval_minutes: 60
+
+  # Calendar reminders
+  calendar:
+    enabled: true
+    interval_minutes: 60
+
+  # RSS feed monitor
+  rss:
+    enabled: true
+    interval_minutes: 60
+
+  # Extreme geopolitical shock detector (multi-source + infra + market corroboration)
+  geoshock:
+    enabled: true
+    interval_minutes: 30
+
+  # YouTube channel monitor
+  yt:
+    enabled: true
+    interval_minutes: 60
+
+  # Rain alerts
+  rain:
+    enabled: true
+    interval_minutes: 240
+
+  # Weather summary
+  weather:
+    enabled: true
+    interval_minutes: 360
+
+  # Sunrise/sunset times for current day (manual trigger only)
+  sunrise:
+    enabled: true
+    manual_only: true
+
+  # Transaction monitor
+  tx:
+    enabled: false
+    interval_minutes: 5
+    config_file: configs/private/txbot.config.json
+
+  # Subdomain discovery (subfinder + DNS verification)
+  newsubdomainbot:
+    enabled: true
+    interval_minutes: 360
+
+  # Precious metals prices
+  metals:
+    enabled: true
+    interval_minutes: 360
+
+  # Aurora alerts
+  aurora:
+    enabled: true
+    interval_minutes: 480
+
+  # LLM Stats homepage top-10 (chat arena) new entrant alerts
+  newtopaimodelbot:
+    enabled: true
+    interval_minutes: 1440
+
+# Telegram command settings
+telegram:
+  # Drop pending updates on startup (avoid spam on restart)
+  drop_pending_updates: true
+
+# Controller settings
+controller:
+  # How often to reload local configs/schedule.yaml (0 = never, reload on restart only)
+  config_reload_minutes: 0
