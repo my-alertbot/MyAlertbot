@@ -3,7 +3,7 @@
 
 # Config setup:
 # - Create a JSON config file with currency and rules.
-# - Point CRYPTOBOT_CONFIG to that file (default: configs/cryptobot.config).
+# - Point CRYPTOBOT_CONFIG to that file (default: configs/private/cryptobot.config).
 # - Each rule requires: id (token id in DefiLlama's `coingecko:<id>` namespace), direction ("above"/"below"), price.
 # - Optional: CRYPTOBOT_STATE for state path.
 # NOTE: interval_sec is no longer read from config - use configs/schedule.yaml to control frequency.
@@ -280,7 +280,7 @@ def run(
     logging.debug("Running cryptobot: %s", format_run_info(schedule_context))
 
     config_path = Path(
-        os.getenv("CRYPTOBOT_CONFIG", str(CONFIG_DIR / "cryptobot.config"))
+        os.getenv("CRYPTOBOT_CONFIG", str(CONFIG_DIR / "private" / "cryptobot.config"))
     )
     try:
         # interval_sec removed from config - configs/schedule.yaml controls frequency

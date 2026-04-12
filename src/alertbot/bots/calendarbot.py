@@ -257,6 +257,7 @@ def run(
     manual_trigger: bool = False,
     chat_id: str | None = None,
     schedule_context: dict[str, Any] | None = None,
+    args: list[str] | None = None,
 ) -> dict[str, Any]:
     """Run calendar check.
 
@@ -264,11 +265,26 @@ def run(
         manual_trigger: True if triggered via Telegram command
         chat_id: Override chat ID for response
         schedule_context: Context passed by controller for scheduled runs
+        args: Command arguments (e.g., ["7"] for /calendar 7)
 
     Returns:
         dict with success status, message, and alerts_sent count
     """
     logging.debug("Running calendarbot: %s", format_run_info(schedule_context))
+
+    # Parse days argument for manual triggers (default to 7 days)
+    days = 7
+    if manual_trigger and args:
+        for arg in args:
+            try:
+                days = int(arg)
+                if days < 1:
+                    days = 1
+                elif days > 365:
+                    days = 365
+                break  # Use first valid integer
+            except ValueError:
+                continue
 
     try:
         token = getenv_required("TELEGRAM_BOT_TOKEN")
@@ -321,7 +337,7 @@ def run(
         if manual_trigger:
             time_diff = event_time - now
             hours_until = time_diff.total_seconds() / 3600
-            if hours_until < 48:  # Show events within 48 hours
+            if 0 <= hours_until < (days * 24):  # Show events within specified days
                 upcoming_events.append((event, event_time, now))
 
         if should_alert(event, event_time, now, state, lookback_minutes):
@@ -341,13 +357,13 @@ def run(
     message = None
     if manual_trigger:
         if upcoming_events:
-            lines = ["📅 Upcoming Events:"]
+            lines = [f"📅 Upcoming Events (next {days} days):"]
             for event, event_time, _ in sorted(upcoming_events, key=lambda x: x[1]):
                 time_str = _format_display_time(event_time, tz)
                 lines.append(f"  • {event.get('name', 'Unnamed')} - {time_str}")
             message = "\n".join(lines)
         else:
-            message = "📅 No upcoming events in the next 48 hours"
+            message = f"📅 No upcoming events in the next {days} days"
 
     # Clean up old alerts (older than 30 days)
     cutoff = (now - timedelta(days=30)).isoformat()

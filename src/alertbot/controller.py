@@ -73,6 +73,7 @@ BOT_MODULES = {
     "newtopaimodelbot": "newtopaimodelbot",
     "newsubdomainbot": "newsubdomainbot",
     "geoshock": "geoshockbot",
+    "luma": "lumabot",
 }
 
 # Telegram command aliases -> canonical bot names
@@ -548,6 +549,7 @@ class BotRunner:
                         module.run,
                         manual_trigger=True,
                         chat_id=str(chat_id),
+                        args=context.args,
                     )
                 else:
                     # Fallback to main() for unrefactored bots

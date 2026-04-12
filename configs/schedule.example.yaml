@@ -96,6 +96,11 @@ bots:
     enabled: true
     interval_minutes: 1440
 
+  # Luma event page monitor
+  luma:
+    enabled: false
+    interval_minutes: 60
+
 # Telegram command settings
 telegram:
   # Drop pending updates on startup (avoid spam on restart)

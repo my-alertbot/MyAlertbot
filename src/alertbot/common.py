@@ -350,6 +350,8 @@ def parse_iso_utc(value: str) -> datetime | None:
 
 def load_json(path: Path, default: dict, strict: bool = False) -> dict:
     if not path.exists():
+        if strict:
+            raise ValueError(f"config file not found: {path}")
         return default
     try:
         return json.loads(path.read_text())

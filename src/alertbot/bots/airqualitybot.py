@@ -306,7 +306,7 @@ def fetch_aqi_waqi_average(
                         )
                         city_match = True
             if not city_match:
-                logging.warning(
+                logging.debug(
                     "Skipping station %s: city '%s' does not match '%s'",
                     station,
                     station_city,
@@ -343,7 +343,7 @@ def fetch_aqi(config: Config) -> Tuple[int, int, int]:
                     config.longitude,
                 )
             except StationCityMismatchError as exc:
-                logging.warning(
+                logging.info(
                     "Station list doesn't align with city, falling back to coordinate-based AQI: %s",
                     exc,
                 )
