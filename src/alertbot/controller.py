@@ -549,7 +549,6 @@ class BotRunner:
                         module.run,
                         manual_trigger=True,
                         chat_id=str(chat_id),
-                        args=context.args,
                     )
                 else:
                     # Fallback to main() for unrefactored bots
