@@ -101,6 +101,11 @@ bots:
     enabled: false
     interval_minutes: 60
 
+  # Domain monitor (DNS over HTTPS, HTTP probes, cert expiry)
+  dns:
+    enabled: false
+    interval_minutes: 1
+
 # Telegram command settings
 telegram:
   # Drop pending updates on startup (avoid spam on restart)

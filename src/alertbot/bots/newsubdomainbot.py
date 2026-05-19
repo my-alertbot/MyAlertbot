@@ -377,10 +377,11 @@ def run(
             except Exception as exc:
                 logging.warning("[newsubdomainbot] telegram send failed for %s: %s", host, exc)
 
+        merged_known = sorted(set(current_hosts) | previous_known_set)
         domains_state[domain] = {
-            "known_subdomains": current_hosts,
+            "known_subdomains": merged_known,
             "last_snapshot": build_state_snapshot(verified),
-            "last_count": len(current_hosts),
+            "last_count": len(merged_known),
             "last_run": iso_now(),
         }
 

@@ -74,6 +74,7 @@ BOT_MODULES = {
     "newsubdomainbot": "newsubdomainbot",
     "geoshock": "geoshockbot",
     "luma": "lumabot",
+    "dns": "dnsbot",
 }
 
 # Telegram command aliases -> canonical bot names
