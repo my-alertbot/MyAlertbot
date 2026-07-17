@@ -236,7 +236,7 @@ def fetch_youtube_feed_ytdlp(
 
 
 def fetch_youtube_feed_rss(channel_id: str) -> Tuple[Optional[str], List[Dict[str, str]]]:
-    """Fetch YouTube channel feed via RSS (fallback)."""
+    """Fetch YouTube channel feed via RSS (primary source, carries publish dates)."""
     url = "https://www.youtube.com/feeds/videos.xml"
     xml_text = request_text(url, params={"channel_id": channel_id})
     return parse_youtube_feed(xml_text)
@@ -246,15 +246,26 @@ def fetch_youtube_feed(
     channel_id: str,
     ytdlp_bin: Optional[str] = None,
 ) -> Tuple[Optional[str], List[Dict[str, str]]]:
-    """Fetch YouTube channel feed, trying yt-dlp first then falling back to RSS."""
+    """Fetch YouTube channel feed.
+
+    The RSS feed (videos.xml) is the primary source: it is lightweight and,
+    crucially, carries each video's <published> date, which the new-video
+    detection relies on to suppress old or reposted entries. yt-dlp's
+    --flat-playlist mode omits publish dates, so it is used only as a fallback
+    when the RSS feed is unavailable (in which case dates are absent and only
+    video-ID comparison guards against duplicates).
+    """
+    try:
+        return fetch_youtube_feed_rss(channel_id)
+    except Exception as exc:
+        logging.warning("RSS feed failed for channel %s: %s", channel_id, exc)
     if ytdlp_bin:
-        try:
-            return fetch_youtube_feed_ytdlp(channel_id, ytdlp_bin)
-        except Exception as exc:
-            logging.warning(
-                "yt-dlp failed for channel %s, falling back to RSS: %s", channel_id, exc
-            )
-    return fetch_youtube_feed_rss(channel_id)
+        logging.info(
+            "Falling back to yt-dlp for channel %s (publish dates unavailable)",
+            channel_id,
+        )
+        return fetch_youtube_feed_ytdlp(channel_id, ytdlp_bin)
+    raise
 
 
 def format_youtube_alert(channel_label: str, entry: Dict[str, str]) -> str:

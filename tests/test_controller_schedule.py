@@ -216,5 +216,94 @@ class TelegramCommandRegistrationTests(unittest.TestCase):
         self.assertNotIn("pluginbot", command_names)
 
 
+class BotRunnerRunTimeoutTests(unittest.TestCase):
+    """Regression: a bot run that blocks forever must release its asyncio lock.
+
+    Without a run-timeout guard, ``await asyncio.to_thread(module.run)`` never
+    returns, ``async with lock:`` never exits, and every later scheduled fire
+    logs 'previous run still active' until the process restarts (the
+    yearnstratchangebot symptom).
+    """
+
+    def _make_runner(self, timeout_seconds: int):
+        import threading
+        from alertbot.controller import BotRunner
+
+        schedule = MagicMock()
+        schedule.is_bot_manual_only.return_value = False
+        schedule.get_interval_minutes.return_value = 60
+        schedule.get_controller_run_timeout_seconds.return_value = timeout_seconds
+
+        state = MagicMock()
+        state.get_last_run.return_value = None
+
+        runner = BotRunner(state=state, schedule=schedule, registry=None)
+
+        hang_event = threading.Event()
+
+        class FakeBot:
+            def __init__(self) -> None:
+                self.calls = 0
+
+            def run(self, manual_trigger: bool = False, schedule_context=None) -> dict:
+                self.calls += 1
+                if self.calls == 1:
+                    # Simulate a run that hangs indefinitely.
+                    hang_event.wait(timeout=30)
+                return {"success": True, "alerts_sent": 0}
+
+        fake = FakeBot()
+        runner._loaded_modules["fakemod"] = fake
+        return runner, fake, hang_event
+
+    def test_stuck_run_times_out_and_releases_lock(self) -> None:
+        import os
+
+        runner, fake, hang_event = self._make_runner(timeout_seconds=1)
+        old_env = os.environ.pop("ALERTBOT_RUN_TIMEOUT_SECONDS", None)
+
+        async def scenario() -> tuple[dict, dict]:
+            first = await runner.run_scheduled("fakemod")
+            hang_event.set()  # release the stuck worker thread
+            second = await runner.run_scheduled("fakemod")
+            return first, second
+
+        try:
+            first, second = asyncio.run(scenario())
+        finally:
+            if old_env is not None:
+                os.environ["ALERTBOT_RUN_TIMEOUT_SECONDS"] = old_env
+
+        # First run: timed out, surfaced as a failure (not a silent skip).
+        self.assertFalse(first["success"])
+        self.assertIn("timed out", first["error"])
+
+        # The lock must have been released, so the second run executes the bot
+        # instead of being skipped as 'previous run still active'.
+        self.assertTrue(second["success"])
+        self.assertNotIn("previous run still active", second.get("message", ""))
+        self.assertEqual(fake.calls, 2, "second run must execute the bot, proving the lock was freed")
+
+    def test_timeout_config_resolution(self) -> None:
+        import os
+        from alertbot.controller import BotRunner
+
+        schedule = MagicMock()
+        schedule.get_controller_run_timeout_seconds.return_value = 600
+        runner = BotRunner(state=MagicMock(), schedule=schedule, registry=None)
+
+        old = os.environ.get("ALERTBOT_RUN_TIMEOUT_SECONDS")
+        try:
+            os.environ["ALERTBOT_RUN_TIMEOUT_SECONDS"] = "0"
+            self.assertIsNone(runner._run_timeout_seconds(), "0 must disable the guard")
+            os.environ["ALERTBOT_RUN_TIMEOUT_SECONDS"] = "2"
+            self.assertEqual(runner._run_timeout_seconds(), 2.0)
+        finally:
+            if old is None:
+                os.environ.pop("ALERTBOT_RUN_TIMEOUT_SECONDS", None)
+            else:
+                os.environ["ALERTBOT_RUN_TIMEOUT_SECONDS"] = old
+
+
 if __name__ == "__main__":
     unittest.main()

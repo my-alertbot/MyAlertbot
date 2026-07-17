@@ -112,9 +112,12 @@ def extract_events_from_next_data(html: str) -> list[LumaEvent]:
     if not isinstance(page_props, dict):
         return []
 
-    # Try common Luma page structures for calendar/community pages
+    # Try common Luma page structures for calendar/community pages.
+    # Current Luma nests upcoming events under initialData.data.featured_items;
+    # older layouts used flat initialData.entries/events.
     entries: Any = (
-        _navigate(page_props, "initialData", "entries")
+        _navigate(page_props, "initialData", "data", "featured_items")
+        or _navigate(page_props, "initialData", "entries")
         or _navigate(page_props, "initialData", "events")
         or page_props.get("entries")
         or page_props.get("events")
@@ -171,6 +174,32 @@ def extract_events_from_json_ld(html: str) -> list[LumaEvent]:
     return events
 
 
+_WARNED_API_ONLY_PAGES: set[str] = set()
+
+
+def _page_loads_events_via_api(html: str) -> bool:
+    """Detect Luma calendar pages that render events client-side.
+
+    Luma moved event data out of the embedded ``__NEXT_DATA__`` payload: the
+    page now lists only ``event_start_ats`` timestamps and fetches full events
+    via an XHR. When that signature is present, embedded extraction always comes
+    up empty regardless of how many events exist, so a recurring "no events"
+    warning would be noise rather than a real signal.
+    """
+    match = re.search(
+        r'<script[^>]+id=["\']__NEXT_DATA__["\'][^>]*>(.*?)</script>',
+        html,
+        re.DOTALL,
+    )
+    if not match:
+        return False
+    try:
+        data = json.loads(match.group(1))
+    except (json.JSONDecodeError, ValueError):
+        return False
+    event_start_ats = _navigate(data, "props", "pageProps", "initialData", "data", "event_start_ats")
+    return isinstance(event_start_ats, list) and len(event_start_ats) > 0
+
 def fetch_page_events(page_url: str) -> list[LumaEvent]:
     """Fetch a Luma page and extract its events."""
     headers = {
@@ -192,7 +221,20 @@ def fetch_page_events(page_url: str) -> list[LumaEvent]:
         logging.debug("[lumabot] Found %d event(s) via JSON-LD on %s", len(events), page_url)
         return events
 
-    logging.warning("[lumabot] No events found on page: %s", page_url)
+    if _page_loads_events_via_api(html):
+        # Page renders events client-side; embedded extraction cannot see them.
+        # Warn once per process so this stays visible without spamming every run.
+        if page_url not in _WARNED_API_ONLY_PAGES:
+            _WARNED_API_ONLY_PAGES.add(page_url)
+            logging.warning(
+                "[lumabot] %s loads events client-side; embedded extraction found none "
+                "and may miss events (page structure changed upstream).",
+                page_url,
+            )
+        else:
+            logging.debug("[lumabot] No events embedded on page: %s", page_url)
+    else:
+        logging.debug("[lumabot] No events found on page: %s", page_url)
     return []
 
 
@@ -219,6 +261,7 @@ def process_page(
     """Check a Luma page for new events. Returns (alerts_sent, failed_sends)."""
     events = fetch_page_events(page_url)
     if not events:
+        page_state["last_checked_at"] = iso_now()
         return 0, 0
 
     events = events[:max_events]

@@ -27,5 +27,47 @@ class ResolveSubjectHtmlUrlTests(unittest.TestCase):
         self.assertEqual(cache[api_url], "https://github.com/yearn/optimization-visualizer/pull/8")
 
 
+class PollSendsAllParamTests(unittest.TestCase):
+    """Regression: GitHub /notifications defaults to unread-only unless all=true.
+
+    Without all=true the bot misses any notification marked read before the
+    next poll and the last_seen_at watermark stalls. Assert poll() always
+    requests all=true so read+unread notifications are returned.
+    """
+    def test_poll_passes_all_true_with_since(self) -> None:
+        import tempfile
+        from pathlib import Path
+
+        captured: dict = {}
+
+        class FakeResp:
+            status_code = 200
+            headers: dict = {}
+
+            def json(self) -> list:
+                return []
+
+        def fake_request(**kwargs):
+            captured.update(kwargs)
+            return FakeResp()
+
+        with tempfile.TemporaryDirectory() as tmp:
+            state_path = Path(tmp) / "state.json"
+            state_path.write_text('{"last_seen_at": "2026-07-14T20:29:15Z", "recent_ids": []}')
+
+            with patch.object(ghbot, "request_with_retry", side_effect=fake_request):
+                ghbot.poll(
+                    token="t",
+                    state_path=state_path,
+                    tg_token="tg",
+                    tg_chat_id="chat",
+                    last_run="2026-07-14T20:29:15Z",
+                )
+
+        params = captured.get("params") or {}
+        self.assertEqual(params.get("all"), "true")
+        self.assertEqual(params.get("since"), "2026-07-14T20:29:15Z")
+
+
 if __name__ == "__main__":
     unittest.main()

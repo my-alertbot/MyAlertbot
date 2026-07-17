@@ -173,7 +173,7 @@ def poll(
         return 0
 
     headers = build_headers(token)
-    params = {"since": since} if since else None
+    params = {"since": since, "all": "true"}
     try:
         resp = request_with_retry(
             method="GET",

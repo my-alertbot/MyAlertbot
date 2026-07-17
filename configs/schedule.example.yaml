@@ -115,3 +115,6 @@ telegram:
 controller:
   # How often to reload local configs/schedule.yaml (0 = never, reload on restart only)
   config_reload_minutes: 0
+  # Max seconds a single bot run may take before it is aborted and its lock
+  # released (prevents a stuck run from blocking all later runs). 0 disables.
+  run_timeout_seconds: 600

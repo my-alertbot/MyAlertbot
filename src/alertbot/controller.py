@@ -53,6 +53,10 @@ SCHEDULE_FILE = CONFIG_DIR / "schedule.yaml"
 PRIVATE_SCHEDULE_FILE = CONFIG_DIR / "privateschedule.yaml"
 STATE_FILE = STATE_DIR / "controller_state.json"
 DEFAULT_LOG_LEVEL = "INFO"
+# Hard ceiling on a single bot run. A run that blocks forever would otherwise
+# hold the bot's asyncio lock indefinitely, so every later scheduled fire logs
+# "previous run still active" until the process restarts. 0 disables the guard.
+DEFAULT_RUN_TIMEOUT_SECONDS = 600
 
 # Canonical bot module mapping: bot name -> module path
 BOT_MODULES = {
@@ -340,6 +344,15 @@ class ScheduleConfig:
             return default
         return max(0, value)
 
+    def get_controller_run_timeout_seconds(self, default: int = DEFAULT_RUN_TIMEOUT_SECONDS) -> int:
+        """Get controller.run_timeout_seconds (0 = no timeout)."""
+        raw = self.config.get("controller", {}).get("run_timeout_seconds", default)
+        try:
+            value = int(raw)
+        except (TypeError, ValueError):
+            return default
+        return value if value >= 0 else default
+
 
 class BotRunner:
     """Handles loading and running bot modules."""
@@ -363,6 +376,21 @@ class BotRunner:
             lock = asyncio.Lock()
             self._bot_locks[bot_name] = lock
         return lock
+
+    def _run_timeout_seconds(self) -> Optional[float]:
+        """Per-run timeout. Env overrides schedule config; None disables the guard."""
+        env_raw = (os.getenv("ALERTBOT_RUN_TIMEOUT_SECONDS") or "").strip()
+        if env_raw:
+            try:
+                value = float(env_raw)
+                return value if value > 0 else None
+            except ValueError:
+                logging.warning("Invalid ALERTBOT_RUN_TIMEOUT_SECONDS=%r, ignoring", env_raw)
+        try:
+            cfg = self.schedule.get_controller_run_timeout_seconds()
+            return float(cfg) if cfg > 0 else None
+        except (TypeError, ValueError):
+            return float(DEFAULT_RUN_TIMEOUT_SECONDS)
 
     def _load_module(self, module_name: str) -> Optional[Any]:
         """Load a bot module by name."""
@@ -476,18 +504,26 @@ class BotRunner:
             "bot_name": bot_name,
         }
 
+        run_timeout = self._run_timeout_seconds()
         async with lock:
             try:
-                # Run in thread pool to avoid blocking
+                # Run in thread pool to avoid blocking; bound it so a stuck run
+                # cannot hold this lock forever (which would wedge every later
+                # scheduled fire behind "previous run still active").
                 if hasattr(module, "run"):
-                    result = await asyncio.to_thread(
-                        module.run,
-                        manual_trigger=False,
-                        schedule_context=schedule_context,
+                    result = await asyncio.wait_for(
+                        asyncio.to_thread(
+                            module.run,
+                            manual_trigger=False,
+                            schedule_context=schedule_context,
+                        ),
+                        timeout=run_timeout,
                     )
                 else:
                     # Fallback to main() for unrefactored bots
-                    result = await asyncio.to_thread(module.main)
+                    result = await asyncio.wait_for(
+                        asyncio.to_thread(module.main), timeout=run_timeout
+                    )
                     result = {"success": result == 0}
 
                 # Update state on success
@@ -495,6 +531,14 @@ class BotRunner:
                     self.state.set_last_run(bot_name, this_run)
 
                 return result if isinstance(result, dict) else {"success": True}
+
+            except asyncio.TimeoutError:
+                logging.error(
+                    "Scheduled bot %s timed out after %ss; releasing lock",
+                    bot_name,
+                    run_timeout,
+                )
+                return {"success": False, "error": f"timed out after {run_timeout}s"}
 
             except Exception as exc:
                 logging.exception("Bot %s failed", bot_name)
@@ -542,18 +586,24 @@ class BotRunner:
             text=f"🔄 Running {bot_name}...",
         )
 
+        run_timeout = self._run_timeout_seconds()
         try:
             async with lock:
-                # Run in thread pool
+                # Run in thread pool; bound it so a stuck run releases the lock.
                 if hasattr(module, "run"):
-                    result = await asyncio.to_thread(
-                        module.run,
-                        manual_trigger=True,
-                        chat_id=str(chat_id),
+                    result = await asyncio.wait_for(
+                        asyncio.to_thread(
+                            module.run,
+                            manual_trigger=True,
+                            chat_id=str(chat_id),
+                        ),
+                        timeout=run_timeout,
                     )
                 else:
                     # Fallback to main() for unrefactored bots
-                    result = await asyncio.to_thread(module.main)
+                    result = await asyncio.wait_for(
+                        asyncio.to_thread(module.main), timeout=run_timeout
+                    )
                     result = {"success": result == 0}
 
                 # Send result if bot didn't send its own message
@@ -570,6 +620,14 @@ class BotRunner:
                         )
 
                 return result if isinstance(result, dict) else {"success": True}
+
+        except asyncio.TimeoutError:
+            logging.error("Manual run of %s timed out after %ss", bot_name, run_timeout)
+            await context.bot.send_message(
+                chat_id=chat_id,
+                text=f"\u23f1\ufe0f {bot_name} timed out after {run_timeout}s.",
+            )
+            return {"success": False, "error": f"timed out after {run_timeout}s"}
 
         except Exception as exc:
             logging.exception("Manual run of %s failed", bot_name)

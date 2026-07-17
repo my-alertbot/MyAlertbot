@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Alert when a new model enters the llm-stats.com homepage top-10 (chat arena)."""
+"""Alert when a new model enters the llm-stats.com homepage top-10 (playground-chat arena)."""
 
 from __future__ import annotations
 
@@ -24,7 +24,7 @@ from alertbot.common import (
 
 SITE_URL = "https://llm-stats.com/"
 DEFAULT_API_BASE_URL = "https://api.zeroeval.com"
-DEFAULT_ARENA_NAME = "chat-arena"
+DEFAULT_ARENA_NAME = "playground-chat"  # was "chat-arena" (removed upstream; playground-chat is its text-chat successor)
 DEFAULT_TOP_N = 10
 DEFAULT_STATE_FILE = STATE_DIR / "newtopaimodelbot.state.json"
 
@@ -192,7 +192,7 @@ def run(
 
     if manual_trigger:
         if is_first_run:
-            message = "Initialized llm-stats top 10 snapshot (chat arena). No alert sent on first run."
+            message = "Initialized llm-stats top 10 snapshot (playground-chat arena). No alert sent on first run."
         elif new_entries:
             message = f"Alert sent: {len(new_entries)} new model(s) entered the llm-stats top 10."
         else:
